@@ -1,7 +1,8 @@
+from __future__ import annotations
 from enum import Enum
 
-from clingo.ast import AST, ASTType
-from typing import List
+from clingo.ast import AST, ASTType, ASTSequence
+from typing import List, Tuple, Set
 
 from .symbol import Symbol
 
@@ -85,6 +86,64 @@ class ASTLine:
             ret.prefix = prefix
         
         return ret
+    
+    
+    @classmethod
+    def build_ast_lines(cls, ast_list:List[AST], cleast:"Cleast") -> Tuple[List["ASTLine"], List["ASTLine"]]:
+        """
+        Builds the final AST lines, by extracting the symbols and dependencies from the given list of AST elements. 
+        This method will also filter the lines based on their file origin, and return the internal and external (coming from an #include statement) lines separately.
+        
+        :param ast_list: A tuple of lists containing the internal and external AST elements.
+        :return: A tuple of lists containing the internal and external AST lines.
+        """
+
+        def deep_search_sym_dep(ast: AST, sym: Set, dep: Set, trace: List):
+            new_trace = trace.copy()
+            if isinstance(ast, ASTSequence):
+                new_trace.append('ASTSequence')
+                for _ast in ast:
+                    deep_search_sym_dep(_ast, sym, dep, new_trace)
+            else:
+                new_trace.append(ast.ast_type)
+                if ast.ast_type == ASTType.SymbolicAtom:
+                    if 'head' in new_trace:
+                        if 'head' in new_trace and ASTType.ConditionalLiteral in new_trace and 'condition' in new_trace:
+                            dep.add(cleast.get_symbol(ast))
+                        else:
+                            sym.add(cleast.get_symbol(ast))
+                    elif 'body':
+                        dep.add(cleast.get_symbol(ast))
+                    else:
+                        sym.add(cleast.get_symbol(ast))
+                else:
+                    if ast.child_keys:
+                        for child in ast.child_keys:
+                            a = eval(f'ast.{child}')
+                            if a:
+                                new_trace.append(child)
+                                deep_search_sym_dep(
+                                    a, sym, dep, new_trace)
+                                new_trace.remove(child)
+                return (sym, dep)
+
+        ast_lines = []
+        external_ast_lines = []
+
+        for ast in ast_list:
+            syms, dependencies = deep_search_sym_dep(ast, set(), set(), [])
+            al = ASTLine.factory(ast, syms, dependencies,
+                                 section=cleast.get_section(ast),
+                                 comments=cleast.get_comments(ast),
+                                 src_dir=cleast.src_dir)
+            
+            if al:
+                if al.location.begin.filename == cleast.filename:
+                    ast_lines.append(al)
+                else:
+                    external_ast_lines.append(al)
+
+        return ast_lines, external_ast_lines
                 
         
 

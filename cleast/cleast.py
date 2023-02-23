@@ -1,26 +1,24 @@
 from __future__ import annotations
-from typing import List, Dict, Tuple, Set
-from clingo.ast import AST, ASTSequence, ASTType, Location, Position
-
+from typing import List, Dict
+from clingo.ast import AST, ASTType
 # Local import
 from .directive import Directive
 from .symbol import Symbol
 from .variable import Variable
-from .astline import ASTLine
+from .astline import ASTLine, ASTLineType
 from .comment import Comment
 
 
 class Cleast:
     """
-    The Clingo class provides additional information and functionality for analyzing and working with an Abstract Syntax Tree (AST) generated from a logic program. 
-    This class takes as input a list of AST objects, the lines of the source file as a list of strings, the filename to the source file, and some parameters to configure it.
-    
+    CLingo Enriched AST (cleast) class provides additional information and functionality for analyzing and working with an Abstract Syntax Tree (AST) generated from a logic program. 
+    This class takes as input a list of AST objects, the lines of the source file as a list of strings, the filename to the source file and the directory.
+
     :param ast_list: AST of the encoding as a list
     :param file: str list representing the file
     :param filename: location of the file
-    :param parameters: documentation parameters 
+    :param src_dir: location
     """
-
 
     def __init__(self,
                  ast_list: List[AST],
@@ -32,27 +30,25 @@ class Cleast:
         self.file = file
         self.filename = filename
         self.src_dir = src_dir
-        
+
         self.directives = Directive.extract_directives(
             self.file, self.filename)
-        
-        self.comments = Comment.extract_comments(file,filename)
+
+        self.comments = Comment.extract_comments(file, filename)
 
         self.symbols = Symbol.extract_symbols(
             ast_list, self.directives.get('predicates'), filename)
-        
+
         self.variables = Variable.extract_variables(
             ast_list, self.directives.get('var'), filename)
-        
-        self.ast_lines, self.external_ast_lines = self.build_ast_lines(
-            ast_list)
 
+        self.ast_lines, self.external_ast_lines = ASTLine.build_ast_lines(
+            ast_list, self)
 
-    
-    def get_line(self,line:int):
+    def get_line(self, line: int):
         """
         Given a line number, returns every element at this line position
-        
+
         :param line: line number where the elements needs to be retrieve
         :return: A list of element
         """
@@ -62,14 +58,11 @@ class Cleast:
         all_elem.extend(self.comments)
         all_elem.extend(self.variables)
         all_elem.extend(self.ast_lines)
-        
+
         for elem in all_elem:
-            if elem.location.begin.line == line or elem.location.begin.line-1 == line :
+            if elem.location.begin.line == line or elem.location.begin.line-1 == line:
                 ret.append(ret)
-                
         return ret
-    
-    
 
     def get_comments(self, ast: AST) -> List[Comment]:
         """
@@ -84,20 +77,14 @@ class Cleast:
         for comment in self.comments:
             if line_number == comment.location.begin.line:
                 ret.append(comment)
-                        
+
         return ret
-                        
-            
-            
-        
-        
 
-
-    def get_section(self, obj) -> Directive | None:
+    def get_sections(self, obj) -> Directive | None:
         """
         Given an object with a location attribute, returns the section directive that the object belongs to. 
         If no associated section directive is found, returns None.
-        
+
         :param obj: An object with a location attribute, such as an AST node or a Symbol.
         :return: The section Directive that the object belongs to, or None if no associated section directive is found.
         """
@@ -114,7 +101,7 @@ class Cleast:
     def get_symbol(self, ast: ASTType.SymbolicAtom):
         """
         Given an AST symbolic atom, returns the Symbol object already computed that corresponds to it.
-        
+
         :param ast: The AST symbolic atom to find the corresponding Symbol for.
         :return: The Symbol object corresponding to the given AST symbolic atom, or None if no such symbol is found.
         """
@@ -122,60 +109,15 @@ class Cleast:
             if ast.symbol.name == symbol.name and ast.symbol.location == symbol.location:
                 return symbol
 
-        return Symbol(ast,None)
+        return Symbol(ast, None)
 
-    def build_ast_lines(self, ast_list: Tuple[List[AST], List[AST]]):
-        """
-        Builds the final AST lines, by extracting the symbols and dependencies from the given list of AST elements. 
-        This method will also filter the lines based on their file origin, and return the internal and external (coming from an #include statement) lines separately.
+    def get_ast_lines(self,
+                      kind: ASTLineType | None = None,
+                      local: bool = False):
+        all_ast = self.ast_lines.copy()
+        if not local : all_ast.extend(self.external_ast_lines)
         
-        :param ast_list: A tuple of lists containing the internal and external AST elements.
-        :return: A tuple of lists containing the internal and external AST lines.
-        """
-        self.ast_lines = None
-        def deep_search_sym_dep(ast: AST, sym: Set, dep: Set, trace: List):
-            new_trace = trace.copy()
-            if isinstance(ast, ASTSequence):
-                new_trace.append('ASTSequence')
-                for _ast in ast:
-                    deep_search_sym_dep(_ast, sym, dep, new_trace)
-            else:
-                new_trace.append(ast.ast_type)
-                if ast.ast_type == ASTType.SymbolicAtom:
-                    if 'head' in new_trace:
-                        if 'head' in new_trace and ASTType.ConditionalLiteral in new_trace and 'condition' in new_trace:
-                            dep.add(self.get_symbol(ast))
-                        else:
-                            sym.add(self.get_symbol(ast))
-                    elif 'body':
-                        dep.add(self.get_symbol(ast))
-                    else:
-                        sym.add(self.get_symbol(ast))
-                else:
-                    if ast.child_keys:
-                        for child in ast.child_keys:
-                            a = eval(f'ast.{child}')
-                            if a:
-                                new_trace.append(child)
-                                deep_search_sym_dep(
-                                    a, sym, dep, new_trace)
-                                new_trace.remove(child)
-                return (sym, dep)
-
-        ast_lines = []
-        external_ast_lines = []
-
-        for ast in ast_list:
-            syms, dependencies = deep_search_sym_dep(ast, set(), set(), [])
-            al = ASTLine.factory(ast, syms, dependencies,
-                                 section=self.get_section(ast),
-                                 comments=self.get_comments(ast),
-                                 src_dir=self.parameters['src_dir'])
-            
-            if al:
-                if al.location.begin.filename == self.filename:
-                    ast_lines.append(al)
-                else:
-                    external_ast_lines.append(al)
-
-        return ast_lines, external_ast_lines
+        if kind:
+            return [ast_line for ast_line in all_ast if ast_line.type == kind]
+        else:
+            return all_ast
