@@ -9,6 +9,7 @@ from .astline import ASTLine, ASTLineType
 from .comment import Comment
 
 
+
 class Cleast:
     """
     CLingo Enriched AST (cleast) class provides additional information and functionality for analyzing and working with an Abstract Syntax Tree (AST) generated from a logic program. 
@@ -24,7 +25,7 @@ class Cleast:
                  ast_list: List[AST],
                  file: List[str],
                  filename: str,
-                 src_dir: Dict,
+                 src_dir: str,
                  ) -> None:
 
         self.file = file
@@ -44,26 +45,8 @@ class Cleast:
 
         self.ast_lines, self.external_ast_lines = ASTLine.build_ast_lines(
             ast_list, self)
-
-    def get_line(self, line: int):
-        """
-        Given a line number, returns every element at this line position
-
-        :param line: line number where the elements needs to be retrieve
-        :return: A list of element
-        """
-        ret = []
-        all_elem = []
-        all_elem.extend(self.directives)
-        all_elem.extend(self.comments)
-        all_elem.extend(self.variables)
-        all_elem.extend(self.ast_lines)
-
-        for elem in all_elem:
-            if elem.location.begin.line == line or elem.location.begin.line-1 == line:
-                ret.append(ret)
-        return ret
-
+        
+    # Private methods    
     def get_comments(self, ast: AST) -> List[Comment]:
         """
         Return a list of comments associated to the 
@@ -110,6 +93,27 @@ class Cleast:
                 return symbol
 
         return Symbol(ast, None)
+
+    # Pulic methods
+    def get_line(self, line: int):
+        """
+        Given a line number, returns every element at this line position
+
+        :param line: line number where the elements needs to be retrieve
+        :return: A list of element
+        """
+        ret = []
+        all_elem = []
+        all_elem.extend(self.directives)
+        all_elem.extend(self.comments)
+        all_elem.extend(self.variables)
+        all_elem.extend(self.ast_lines)
+
+        for elem in all_elem:
+            if elem.location.begin.line == line or elem.location.begin.line-1 == line:
+                ret.append(ret)
+        return ret
+
 
     def get_ast_lines(self,
                       kind: ASTLineType | None = None,
