@@ -1,12 +1,15 @@
 from __future__ import annotations
-from typing import List, Dict
-from clingo.ast import AST, ASTType
+from typing import List
+from clingo.ast import AST, ASTType, ProgramBuilder, parse_files
+from clingo import Control
+
 # Local import
 from .directive import Directive
 from .symbol import Symbol
 from .variable import Variable
 from .astline import ASTLine, ASTLineType
 from .comment import Comment
+from .utils import get_dir_filename
 
 
 
@@ -45,6 +48,24 @@ class Cleast:
 
         self.ast_lines, self.external_ast_lines = ASTLine.build_ast_lines(
             ast_list, self)
+        
+    @classmethod
+    def from_file(cls, file:str):
+
+        ctl = Control()
+        with open(file) as f:
+            file_lines = f.readlines()
+
+        ast_list = []
+        with ProgramBuilder(ctl) as _:
+            parse_files([file], ast_list.append)
+
+        if '/' in file:
+            path = file[:file.rindex('/')]
+        else :
+            path = get_dir_filename('.')
+        
+        return cls(ast_list, file_lines, file, path)
         
     # Private methods    
     def get_comments(self, ast: AST) -> List[Comment]:
