@@ -21,53 +21,52 @@ class Variable:
         self.description = None
         if directive:
             self.definition = directive.description
-            
+
         self.ast = var
-        
+
     def __repr__(self) -> str:
         return f"{self.name}"
 
     @classmethod
-    def extract_variables(cls,
-                        ast_list: List[AST],
-                        predicate_directives=List[Directive],
-                        current_file_path=str,
-                        ) -> List[Variable]:
-    
+    def extract_variables(
+        cls,
+        ast_list: List[AST],
+        predicate_directives=List[Directive],
+        current_file_path=str,
+    ) -> List[Variable]:
         """
         Extracts all variables found in the given list of AST nodes and returns them as a list of Variable objects.
         Each variable will be associated with any directive metadata found in the program's comments, if any.
-        
+
         :param ast_list: A list of AST nodes representing the logic program.
         :param predicate_directives: A list of Directive objects representing the predicate directives found in the program's comments.
         :param current_file: The path of the current file.
         :return: A list of Variable objects representing the variables found in the given list of AST nodes.
         """
-        def rec_extraction(pool: List, ast: AST, var_directives: List[Directive]):
+        directive_dict = {}
+        if predicate_directives:
+            directive_dict = {
+                directive.parameters[0]: directive for directive in predicate_directives
+            }
+
+        def rec_extraction(pool: List, ast: AST):
             if isinstance(ast, ASTSequence):
                 for a in ast:
-                    rec_extraction(pool, a, var_directives)
+                    rec_extraction(pool, a)
             else:
                 if ast.ast_type == ASTType.Variable:
-                    if var_directives:
-                        for directive in var_directives:
-                            if directive.parameters[0] == ast.name:
-                                pool.append(cls(ast, directive))
-                                break
-                        else:
-                            pool.append(cls(ast, None))
-                    else:
-                        pool.append(cls(ast, None))
+                    directive = directive_dict.get(ast.name)
+                    pool.append(cls(ast, directive))
                 else:
                     if ast.child_keys:
                         for key in ast.child_keys:
-                            ast_child = eval(f'ast.{key}')
+                            ast_child = getattr(ast, key)
                             if ast_child:
-                                rec_extraction(pool, ast_child, var_directives)
+                                rec_extraction(pool, ast_child)
 
         pool = []
         for ast in ast_list:
             if ast.location.begin.filename == current_file_path:
-                rec_extraction(pool, ast, predicate_directives)
+                rec_extraction(pool, ast)
 
         return pool

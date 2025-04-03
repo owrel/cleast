@@ -6,10 +6,10 @@ import re
 class Directive:
     """
     Represents a directive found in a logic program file comment, used to add additional metadata to program used in the documentation.
-    
+
     .. note:
-        Directives are useful for adding additional metadata to a logic program file. They allow you to create a documentation that can be automatically used for documentation. However, the current implementation uses regular expressions to find directives and their parameters, which can be fragile and limited. In the future, using a more formal grammar-based approach would be more robust and powerful, allowing for more complex and expressive directives. For example, a grammar-based approach would allow the use of rst or markdown in the documentation, it would also make the expression of different directives more natural. 
-    
+        Directives are useful for adding additional metadata to a logic program file. They allow you to create a documentation that can be automatically used for documentation. However, the current implementation uses regular expressions to find directives and their parameters, which can be fragile and limited. In the future, using a more formal grammar-based approach would be more robust and powerful, allowing for more complex and expressive directives. For example, a grammar-based approach would allow the use of rst or markdown in the documentation, it would also make the expression of different directives more natural.
+
 
     :param name: The name of the directive.
     :param parameters: A list of parameters passed to the directive.
@@ -21,12 +21,14 @@ class Directive:
     DIRECTIVE_IDENTIFIER = "@"
     DESCRIPTION_IDENTIFIER = "->"
 
-    def __init__(self,
-                 name: str,
-                 parameters: List[str],
-                 description: Union[str, None],
-                 line_number: int,
-                 filename: str) -> None:
+    def __init__(
+        self,
+        name: str,
+        parameters: List[str],
+        description: Union[str, None],
+        line_number: int,
+        filename: str,
+    ) -> None:
 
         self.name = name
         self.parameters = parameters
@@ -35,10 +37,10 @@ class Directive:
         self.filename = filename
 
     def __repr__(self) -> str:
-        return self.name + '_' + self.parameters[0]
+        return self.name + "_" + self.parameters[0]
 
     @classmethod
-    def from_line(cls,  line: str, line_number: int, filename: str):
+    def from_line(cls, line: str, line_number: int, filename: str):
         """
         Extracts a `Directive` object from a given line of text.
 
@@ -47,40 +49,23 @@ class Directive:
         :param filename: The filename of the file where the directive was found.
         :return: A `Directive` object representing the directive found in the line, or None if no directive was found.
         """
-        def _extract_parameters(s):
-            result = []
-            current_word = ""
-            in_parentheses = False
-            in_double_quote = False
-            for c in s:
-                if c == "(":
-                    current_word += c
-                    in_parentheses = True
-                elif c == ")":
-                    current_word += c
-                    in_parentheses = False
-                elif c == '"':
-                    if in_double_quote:
-                        in_double_quote = False
-                    else:
-                        in_double_quote = True
 
-                elif c == "," and not in_parentheses:
-                    result.append(current_word)
-                    current_word = ""
-                else:
-                    current_word += c
-            result.append(current_word)
-            return result
+        def _extract_parameters(s):
+            import re
+
+            # Use regex to handle nested structures more efficiently
+            pattern = re.compile(r",\s*(?=(?:[^()]*\([^()]*\))*[^()]*$)")
+            result = pattern.split(s)
+            return [param.strip() for param in result]
 
         rgx = f" *{cls.DIRECTIVE_IDENTIFIER} *(?P<directive_name>[a-zA-Z]+) *\((?P<parameters>[^\-\>]*)\) *({cls.DESCRIPTION_IDENTIFIER} *(?P<description>[^\\n]*))?"
         match = re.search(rgx, line.strip())
         if not match:
             return
 
-        parameters = _extract_parameters(match['parameters'])
-        directive_name = match['directive_name'].strip()
-        description = match['description']
+        parameters = _extract_parameters(match["parameters"])
+        directive_name = match["directive_name"].strip()
+        description = match["description"]
 
         return cls(directive_name, parameters, description, line_number, filename)
 
